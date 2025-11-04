@@ -1,14 +1,16 @@
 PY=python
+export PYTHONPATH := $(PWD)
+
 
 preprocess:
-	$(PY) src/eda.py --input $${DATASET_PATH:-data/raw/Airbnb_Open_Data.csv} --quick-clean
-	$(PY) src/features.py
+	$(PY) -m src.eda --input $${DATASET_PATH:-data/raw/Airbnb_Open_Data.csv} --quick-clean
+	$(PY) -m src.features
 
 train:
-	$(PY) src/train.py
+	$(PY) -m src.train
 
 evaluate:
-	$(PY) src/evaluate.py
+	$(PY) -m src.evaluate
 
 api:
 	uvicorn api.main:app --reload --port 8000

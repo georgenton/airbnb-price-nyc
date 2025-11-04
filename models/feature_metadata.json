@@ -1,0 +1,19 @@
+{
+  "numeric": [
+    "latitude",
+    "longitude",
+    "minimum_nights",
+    "number_of_reviews",
+    "reviews_per_month",
+    "calculated_host_listings_count",
+    "availability_365",
+    "dist_times_sq_km",
+    "dist_wall_st_km"
+  ],
+  "categorical": [
+    "neighbourhood_group",
+    "room_type"
+  ],
+  "hi_card_encoded": [],
+  "target": "price"
+}

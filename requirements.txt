@@ -12,3 +12,7 @@ pydantic==2.9.2
 python-dotenv==1.0.1
 requests==2.32.3
 shap==0.46.0
+pyarrow==17.0.0
+streamlit==1.39.0
+pydeck
+requests
