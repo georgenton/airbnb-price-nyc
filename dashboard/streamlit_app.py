@@ -195,6 +195,11 @@ with tab2:
     
     try:
         df = pd.read_parquet(parquet_path)
+        # 🔧 Limpieza global inicial
+        valid_groups = ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"]
+        df = df[df['neighbourhood_group'].isin(valid_groups)].copy()
+        df = df.dropna(subset=['neighbourhood_group', 'room_type'])
+
         st.success(f"✅ Datos cargados: {len(df):,} registros")
         
         # --- KPIs Principales ---
@@ -232,13 +237,29 @@ with tab2:
             )
         
         with col_filter2:
-            room_types = sorted(df['room_type'].unique())
-            selected_room_types = st.multiselect(
+            # 🔤 Traducción de tipos de habitación
+            room_type_map = {
+                "Entire home/apt": "Casa/Apartamento",
+                "Private room": "Privada",
+                "Shared room": "Compartida",
+                "Hotel room": "Hotel"
+            }
+
+            # Lista original de tipos de habitación
+            room_types_en = sorted(df['room_type'].unique())
+
+            # Traducción visible al usuario
+            room_types_es = [room_type_map.get(rt, rt) for rt in room_types_en]
+            selected_room_types_es = st.multiselect(
                 "Tipos de Habitación",
-                room_types,
-                default=room_types
+                room_types_es,
+                default=room_types_es
             )
-        
+
+            # 🔁 Convertir la selección del usuario de español → inglés
+            inv_room_type_map = {v: k for k, v in room_type_map.items()}
+            selected_room_types = [inv_room_type_map[rt] for rt in selected_room_types_es]
+                
         with col_filter3:
             price_range = st.slider(
                 "Rango de Precio (USD)",
@@ -276,7 +297,12 @@ with tab2:
             
             # Precio promedio por distrito y tipo de habitación
             st.subheader("🏙️ Precio por Distrito y Tipo")
+
+            
+
             price_summary = filtered_df.groupby(['neighbourhood_group', 'room_type'])['price'].mean().reset_index()
+              
+
             fig_bar = px.bar(
                 price_summary,
                 x='neighbourhood_group',
