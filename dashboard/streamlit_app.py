@@ -138,21 +138,33 @@ with tab1:
                         # pydeck usará este token para mapbox
                         pdk.settings.mapbox_api_key = MAPBOX_TOKEN
 
-                    layer = pdk.Layer(
-                        "HeatmapLayer",
-                        data=df.rename(columns={"latitude": "lat", "longitude": "lon"}),
-                        get_position=["lon", "lat"],
-                        get_weight="price",
-                        radiusPixels=30,
+
+                    df = df.rename(columns={
+                        "neighbourhood": "barrio",
+                        "neighbourhood_group": "distrito",
+                        "price": "precio"
+                    })
+
+                    fig = px.density_mapbox(
+                        df,
+                        lat="latitude",
+                        lon="longitude",
+                        z="precio",          # Peso que antes era get_weight
+                        radius=10,          # Equivalente a radiusPixels
+                        center=dict(lat=40.75, lon=-73.98),
+                        zoom=9,
+                        mapbox_style="carto-positron",  # Puedes cambiar por map_style si lo tienes
+                        color_continuous_scale="inferno",
+                        hover_data={          
+                            "distrito": True,             # TOOLTIP PERSONALIZADO
+                            "barrio": True,
+                            "precio": ":.0f",               # formateo opcional
+                            "latitude": False,             # ocultar si quieres
+                            "longitude": False
+                        },
                     )
-                    view_state = pdk.ViewState(latitude=40.75, longitude=-73.98, zoom=9)
-                    st.pydeck_chart(
-                        pdk.Deck(
-                            map_style=map_style,
-                            layers=[layer],
-                            initial_view_state=view_state,
-                        )
-                    )
+
+                    st.plotly_chart(fig,use_container_width=True)
                     if not MAPBOX_TOKEN:
                         st.info("No se detectó MAPBOX_TOKEN. El mapa se muestra sin estilo base. "
                                 "Puedes definir MAPBOX_TOKEN en secrets o variables de entorno para un mapa más bonito.")
