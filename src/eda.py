@@ -1,6 +1,7 @@
 # --- bootstrap sys.path ---
 from pathlib import Path
 import sys
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -10,77 +11,129 @@ import pandas as pd
 import numpy as np
 from src.config import DATA_RAW, DATA_INTERIM, DATASET_PATH as ENV_DATASET_PATH
 
-# Mapeo amplio de alias -> nombre canónico
+
+# ===== Alias de columnas del CSV original -> nombres canónicos =====
 ALIASES = {
+    # originales del dataset
+    "id": "id",
+    "name": "name",
+    "host_id": "host_id",
+    "host_identity_verified": "host_identity_verified",
+    "host_name": "host_name",
     "neighbourhood_group": "neighbourhood_group",
     "neighbourhood": "neighbourhood",
+    "lat": "latitude",
+    "long": "longitude",
+    "country": "country",
+    "country_code": "country_code",
+    "instant_bookable": "instant_bookable",
+    "cancellation_policy": "cancellation_policy",
     "room_type": "room_type",
+    "construction_year": "construction_year",
     "price": "price",
-    "latitude": "latitude",
-    "longitude": "longitude",
+    "service_fee": "service_fee",
     "minimum_nights": "minimum_nights",
     "number_of_reviews": "number_of_reviews",
+    "last_review": "last_review",
     "reviews_per_month": "reviews_per_month",
+    "review_rate_number": "review_rate_number",
     "calculated_host_listings_count": "calculated_host_listings_count",
     "availability_365": "availability_365",
-    "id": "id",
-    "host_id": "host_id",
-    "host_name": "host_name",
-    "last_review": "last_review",
+    "house_rules": "house_rules",
+    "license": "license",
 
-    # alias extra comunes y variantes
-    "neighborhood_group": "neighbourhood_group",
+    # variantes con espacios / mayúsculas (por seguridad)
+    "host id": "host_id",
+    "host name": "host_name",
+    "neighbourhood group": "neighbourhood_group",
+    "neighborhood group": "neighbourhood_group",
     "neighborhood": "neighbourhood",
     "room type": "room_type",
-    "lat": "latitude",
-    "lng": "longitude",
-    "lon": "longitude",
-    "long": "longitude",
-    "geo_lat": "latitude",
-    "geo_lng": "longitude",
-    "geo_long": "longitude",
-    "host name": "host_name",
+    "construction year": "construction_year",
+    "service fee": "service_fee",
+    "availability 365": "availability_365",
+    "review rate number": "review_rate_number",
 }
 
+# columnas que queremos conservar para pasar a la etapa de features
 KEEP = [
-    "id","host_id","host_name","neighbourhood_group","neighbourhood","room_type",
-    "latitude","longitude","price","minimum_nights","number_of_reviews",
-    "reviews_per_month","calculated_host_listings_count","availability_365","last_review"
+    "id",
+    "name",
+    "host_id",
+    "host_identity_verified",
+    "host_name",
+    "neighbourhood_group",
+    "neighbourhood",
+    "latitude",
+    "longitude",
+    "country",
+    "country_code",
+    "instant_bookable",
+    "cancellation_policy",
+    "room_type",
+    "construction_year",
+    "price",
+    "service_fee",
+    "minimum_nights",
+    "number_of_reviews",
+    "last_review",
+    "reviews_per_month",
+    "review_rate_number",
+    "calculated_host_listings_count",
+    "availability_365",
+    "house_rules",
+    "license",
 ]
 
-REQUIRED = ["latitude","longitude","room_type","price"]
+# columnas mínimas sin las cuales no tiene sentido seguir
+REQUIRED = ["latitude", "longitude", "room_type", "price"]
 
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Normaliza nombres a snake_case simple y aplica alias."""
+    """
+    Normaliza nombres de columnas:
+    - trim
+    - minúsculas
+    - espacios, guiones y barras -> "_"
+    - aplica ALIASES
+    """
     ren = {}
     for c in df.columns:
         k = (
-            c.strip().lower()
-             .replace("-", " ")
-             .replace("/", " ")
-             .replace("__", "_")
+            c.strip()
+            .lower()
+            .replace("-", " ")
+            .replace("/", " ")
+            .replace("__", "_")
         )
         k = " ".join(k.split())
-        k = k.replace(" ", "_")  # snake_case simple
+        k = k.replace(" ", "_")
         ren[c] = ALIASES.get(k, k)
     return df.rename(columns=ren)
 
 
 def coerce_types(df: pd.DataFrame) -> pd.DataFrame:
-    """Convierte tipos QNAs, incluyendo saneo robusto de price/lat/long."""
+    """
+    Convierte tipos de datos a formatos útiles para el modelo.
+    Maneja:
+    - price / service_fee con símbolo $
+    - lat / long
+    - numéricos varios
+    - fechas
+    """
     # PRICE: quitar símbolos, comas, espacios
-    if "price" in df.columns:
-        df["price"] = (
-            df["price"]
-            .astype(str)
-            .str.replace(r"[^\d\.\,\-]", "", regex=True)  # deja dígitos, punto, coma, signo
-            .str.replace(",", "", regex=False)           # quita separador de miles como coma
-            .replace("", np.nan)
-        )
-        df["price"] = pd.to_numeric(df["price"], errors="coerce")
+    for col in ["price", "service_fee"]:
+        if col in df.columns:
+            df[col] = (
+                df[col]
+                .astype(str)
+                .str.replace(r"[^\d\.\,\-]", "", regex=True)  # deja dígitos, punto, coma, signo
+                .str.replace(",", "", regex=False)
+                .replace("", np.nan)
+            )
+            df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # LAT/LON: convertir coma decimal a punto si aparece (ej. "40,7128")
+    # LAT/LON
     for c in ["latitude", "longitude"]:
         if c in df.columns:
             df[c] = (
@@ -92,31 +145,55 @@ def coerce_types(df: pd.DataFrame) -> pd.DataFrame:
             )
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    # Otros numéricos comunes
+    # Otros numéricos
     num_cols = [
-        "minimum_nights","number_of_reviews","reviews_per_month",
-        "calculated_host_listings_count","availability_365"
+        "minimum_nights",
+        "number_of_reviews",
+        "reviews_per_month",
+        "review_rate_number",
+        "calculated_host_listings_count",
+        "availability_365",
+        "construction_year",
     ]
     for c in num_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
+    # Fechas
+    if "last_review" in df.columns:
+        df["last_review"] = pd.to_datetime(df["last_review"], errors="coerce")
+
     # Categóricas
-    for c in ["room_type","neighbourhood_group","neighbourhood"]:
+    for c in [
+        "room_type",
+        "neighbourhood_group",
+        "neighbourhood",
+        "country",
+        "country_code",
+        "instant_bookable",
+        "cancellation_policy",
+        "host_identity_verified",
+        "license",
+    ]:
         if c in df.columns:
-            df[c] = df[c].astype(str).str.strip()
+            df[c] = df[c].astype(str).str.strip().replace({"": np.nan})
+
+    # Textos libres
+    for c in ["name", "house_rules"]:
+        if c in df.columns:
+            df[c] = df[c].astype(str).fillna("")
 
     return df
 
 
 def _apply_filters(df: pd.DataFrame, bounds: dict, verbose: bool) -> pd.DataFrame:
-    """Aplica filtros razonables configurables y clipping."""
+    """Filtros razonables y clipping."""
     if verbose:
         print(f"🔧 Filtros: {bounds}")
 
-    # dropna de requeridas
+    # dropna básicas
     before = len(df)
-    df = df.dropna(subset=["latitude","longitude","room_type","price"])
+    df = df.dropna(subset=["latitude", "longitude", "room_type", "price"])
     if verbose:
         print(f"➡️  dropna(required): {before} -> {len(df)}")
 
@@ -142,17 +219,17 @@ def _apply_filters(df: pd.DataFrame, bounds: dict, verbose: bool) -> pd.DataFram
     # clips suaves
     for c, (lo, hi) in bounds.get("clips", {}).items():
         if c in df.columns:
-            before = df[c].isna().sum()
+            before_na = df[c].isna().sum()
             df[c] = df[c].clip(lo, hi)
             if verbose:
-                print(f"➡️  clip {c} to [{lo},{hi}] (n_na antes={before})")
+                print(f"➡️  clip {c} to [{lo},{hi}] (n_na antes={before_na})")
 
     return df
 
 
 def quick_clean(df: pd.DataFrame, verbose: bool = False) -> pd.DataFrame:
     if verbose:
-        print(f"🧾 Columnas originales: {sorted(df.columns.tolist())[:20]} ... (total {len(df.columns)})")
+        print(f"🧾 Columnas originales: {list(df.columns)[:20]} ... (total {len(df.columns)})")
 
     df = normalize_columns(df)
     df = coerce_types(df)
@@ -160,7 +237,7 @@ def quick_clean(df: pd.DataFrame, verbose: bool = False) -> pd.DataFrame:
     if verbose:
         print(f"🧭 Columnas normalizadas: {sorted(df.columns.tolist())}")
 
-    # Diagnóstico si faltan columnas clave
+    # Comprobar columnas requeridas
     missing = [c for c in REQUIRED if c not in df.columns]
     if missing:
         print("⚠️  Columnas requeridas no encontradas:", missing)
@@ -168,42 +245,45 @@ def quick_clean(df: pd.DataFrame, verbose: bool = False) -> pd.DataFrame:
         print(sorted(df.columns.tolist()))
         raise KeyError(f"Faltan columnas requeridas: {missing}")
 
-    # Mantener columnas relevantes si existen
+    # Mantener columnas relevantes
     cols = [c for c in KEEP if c in df.columns]
     df = df[cols].copy()
 
     if verbose:
         print(f"📊 Filas iniciales tras selección KEEP: {len(df)}")
 
-    # Filtros estándar (conservadores)
+    # Filtros estándar centrados en Airbnb típico
     std_bounds = {
-        "price": (0, 1500),
+        "price": (10, 800),
         "minimum_nights": (1, 60),
         "clips": {
             "number_of_reviews": (0, 1000),
             "availability_365": (0, 365),
             "minimum_nights": (1, 30),
-        }
+        },
     }
     df_std = _apply_filters(df.copy(), std_bounds, verbose)
 
-    # Si quedan muy pocas filas, relajar
+    # Si quedan pocas filas, relajar filtros
     if len(df_std) < 1000:
         if verbose:
-            print(f"⚠️  Muy pocas filas con filtros estándar ({len(df_std)}). Reintentando con filtros relajados…")
+            print(
+                f"⚠️  Muy pocas filas con filtros estándar ({len(df_std)}). "
+                f"Reintentando con filtros relajados…"
+            )
         soft_bounds = {
-            "price": (5, 10000),
+            "price": (5, 1500),
             "minimum_nights": (1, 365),
             "clips": {
                 "number_of_reviews": (0, 5000),
                 "availability_365": (0, 366),
                 "minimum_nights": (1, 365),
-            }
+            },
         }
         df_soft = _apply_filters(df.copy(), soft_bounds, verbose)
         if len(df_soft) > len(df_std):
             if verbose:
-                print(f"✅ Usando filtros relajados: {len(df_soft)} filas (vs {len[df_std]} estándar)")
+                print(f"✅ Usando filtros relajados: {len(df_soft)} filas (vs {len(df_std)} estándar)")
             return df_soft
 
     return df_std

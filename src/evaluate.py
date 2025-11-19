@@ -1,50 +1,62 @@
+# src/train.py
 # --- bootstrap sys.path ---
 from pathlib import Path
 import sys
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import json
+
 import joblib
 import pandas as pd
-import numpy as np
-from sklearn.metrics import mean_absolute_error, mean_squared_error, median_absolute_error, r2_score
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
 from src.config import DATA_PROCESSED, MODELS_DIR
 
 
+def load_data():
+    X_train = pd.read_parquet(DATA_PROCESSED / "X_train.parquet")
+    y_train = pd.read_parquet(DATA_PROCESSED / "y_train.parquet")["price"].values
+    return X_train, y_train
+
+
 def main():
-    X_test = pd.read_parquet(DATA_PROCESSED / "X_test.parquet")
-    y_test = pd.read_parquet(DATA_PROCESSED / "y_test.parquet")["price"].values
-    model = joblib.load(MODELS_DIR / "model.joblib")
+    meta_path = MODELS_DIR / "feature_metadata.json"
+    meta = json.loads(meta_path.read_text())
 
-    preds = model.predict(X_test)
-    rmse = mean_squared_error(y_test, preds, squared=False)
-    mae = mean_absolute_error(y_test, preds)
-    medae = median_absolute_error(y_test, preds)
-    r2 = r2_score(y_test, preds)
-    denom = np.maximum(np.abs(y_test), 1e-9)
-    mape = (np.abs(y_test - preds) / denom).mean() * 100
-    ae = np.abs(y_test - preds)
-    p90_ae = float(np.percentile(ae, 90))
+    X_train, y_train = load_data()
 
-    print(f"RMSE : {rmse:,.2f}")
-    print(f"MAE  : {mae:,.2f}")
-    print(f"MedAE: {medae:,.2f}")
-    print(f"MAPE : {mape:,.2f}%")
-    print(f"R²   : {r2:,.4f}")
-    print(f"P90-AE: {p90_ae:,.2f}")
+    cat_cols = [c for c in meta["categorical"] if c in X_train.columns]
+    num_cols = [c for c in meta["numeric"] if c in X_train.columns]
 
-    metrics = {
-        "rmse": rmse, "mae": mae, "medae": medae, "mape_percent": mape,
-        "r2": r2, "p90_ae": p90_ae, "n_test": int(len(y_test))
-    }
-    with open(MODELS_DIR / "metrics.json", "w") as f:
-        json.dump(metrics, f, indent=2)
-    print("💾 Métricas guardadas en models/metrics.json")
+    pre = ColumnTransformer(
+        transformers=[
+            ("cat", OneHotEncoder(handle_unknown="ignore"), cat_cols),
+            ("num", "passthrough", num_cols),
+        ],
+        remainder="drop",
+        verbose_feature_names_out=False,
+    )
 
-    pd.DataFrame({"y_true": y_test, "y_pred": preds}).to_parquet(DATA_PROCESSED / "predictions.parquet")
-    print("💾 Predicciones guardadas en data/processed/predictions.parquet")
+    # Modelo más interpretable y menos propenso a sobreajuste que XGBoost sin control
+    model = RandomForestRegressor(
+        n_estimators=300,
+        max_depth=18,
+        min_samples_leaf=5,
+        n_jobs=-1,
+        random_state=42,
+    )
+
+    pipe = Pipeline(steps=[("pre", pre), ("model", model)])
+    pipe.fit(X_train, y_train)
+
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    joblib.dump(pipe, MODELS_DIR / "model.joblib")
+    print("✅ Modelo entrenado y guardado en models/model.joblib")
 
 
 if __name__ == "__main__":
