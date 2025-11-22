@@ -9,6 +9,9 @@ import pydeck as pdk
 
 import plotly.express as px
 
+# Configuración de página
+st.set_page_config(page_title="Airbnb Price Calculator (NYC)", layout="wide")
+st.title("🗽 Airbnb NYC - Calculadora de Precio Estimado")
 
 # --- Configuración de pestañas ---
 tab1, tab2 = st.tabs(["🤖 Machine Learning", "📊 Dashboard"])
@@ -48,9 +51,7 @@ with tab1:
     API_URL_DEFAULT = get_api_url()
     MAPBOX_TOKEN = get_mapbox_token()
 
-    # Configuración de página
-    st.set_page_config(page_title="Airbnb Price Calculator (NYC)", layout="wide")
-    st.title("🗽 Airbnb NYC — Price Calculator")
+
 
     # ---- Sidebar: config y inputs ----
     st.sidebar.header("Configuración")
@@ -96,7 +97,7 @@ with tab1:
 
     # ---- Predicción ----
     with col_left:
-        st.subheader("🔮 Predicted Price")
+        st.subheader("🔮 Precio estimado por noche (USD)")
         if st.button("Calcular precio"):
             try:
                 pred = call_predict(api_url, payload)
@@ -119,7 +120,7 @@ with tab1:
 
     # ---- Mapa / EDA rápido ----
     with col_right:
-        st.subheader("🗺️ Mapa de listados (limpios)")
+        st.subheader("🗺️ Mapa de densidad de precios (Airbnb NYC)")
         parquet_path = DATA_INTERIM / "listings_clean.parquet"
         if parquet_path.exists():
             try:
@@ -130,7 +131,7 @@ with tab1:
 
                 needed = {"latitude", "longitude", "price"}
                 if needed.issubset(df.columns):
-                    st.caption(f"{len(df):,} puntos renderizados (muestra si el dataset es muy grande).")
+                    st.caption(f"{len(df):,} puntos renderizados.")
 
                     # Si no hay token, usamos mapa sin estilo base (sigue mostrando el heatmap sobre fondo simple)
                     map_style = "mapbox://styles/mapbox/light-v9" if MAPBOX_TOKEN else None
