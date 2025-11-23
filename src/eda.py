@@ -1,3 +1,4 @@
+# src/eda.py
 # --- bootstrap sys.path ---
 from pathlib import Path
 import sys
@@ -87,6 +88,12 @@ KEEP = [
 
 # columnas mínimas sin las cuales no tiene sentido seguir
 REQUIRED = ["latitude", "longitude", "room_type", "price"]
+
+# correcciones específicas para neighbourhood_group detectadas en el EDA
+NEIGH_GROUP_FIXES = {
+    "brookln": "Brooklyn",
+    "manhatan": "Manhattan",
+}
 
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -186,6 +193,21 @@ def coerce_types(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def clean_neighbourhood_group(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Corrige typos específicos en neighbourhood_group detectados en el dataset
+    (por ejemplo, 'brookln' -> 'Brooklyn', 'manhatan' -> 'Manhattan').
+    No modifica la lógica de tratamiento de NaN ni el resto del pipeline.
+    """
+    if "neighbourhood_group" not in df.columns:
+        return df
+
+    s = df["neighbourhood_group"].astype(str).str.strip()
+    s = s.replace(NEIGH_GROUP_FIXES)
+    df["neighbourhood_group"] = s
+    return df
+
+
 def _apply_filters(df: pd.DataFrame, bounds: dict, verbose: bool) -> pd.DataFrame:
     """Filtros razonables y clipping."""
     if verbose:
@@ -233,6 +255,7 @@ def quick_clean(df: pd.DataFrame, verbose: bool = False) -> pd.DataFrame:
 
     df = normalize_columns(df)
     df = coerce_types(df)
+    df = clean_neighbourhood_group(df)
 
     if verbose:
         print(f"🧭 Columnas normalizadas: {sorted(df.columns.tolist())}")
