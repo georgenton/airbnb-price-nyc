@@ -1,7 +1,8 @@
-# src/train.py
+# src/evaluate.py
 # --- bootstrap sys.path ---
 from pathlib import Path
 import sys
+
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -58,6 +59,17 @@ def main():
     joblib.dump(pipe, MODELS_DIR / "model.joblib")
     print("✅ Modelo entrenado y guardado en models/model.joblib")
 
+    metrics_path = MODELS_DIR / "metrics.json"
+    if metrics_path.exists():
+        with open(metrics_path, "r") as f:
+            metrics_values = json.load(f)
 
+        print("📊 Métricas del modelo:")
+        for name, value in metrics_values.items():
+            print(f"  {name:12}: {value}")
+    else:
+        print("⚠️ No se encontró models/metrics.json")
+    
+    
 if __name__ == "__main__":
     main()

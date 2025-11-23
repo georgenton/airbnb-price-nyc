@@ -1,3 +1,4 @@
+# src/train.py
 # --- bootstrap sys.path ---
 from pathlib import Path
 import sys
